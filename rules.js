@@ -35,14 +35,14 @@ async function getAccessToken() {
     }
 }
 
-async function getScheduledQueryRules(session, resourceGroup) {
+async function getObjects(session, resourceGroup, type, version) {
     const s = new spinner(`getting scheduled-query-rules... %s`);
     s.start();
     try {
         const response = await axios.get(
             `https://management.azure.com/subscriptions/${
                 session.subscription
-            }/resourcegroups/${resourceGroup}/providers/microsoft.insights/scheduledQueryRules?api-version=2018-04-16`,
+            }/resourcegroups/${resourceGroup}/providers/microsoft.insights/${type}?api-version=${version}`,
             {
                 headers: {
                     Authorization: `Bearer ${session.accessToken}`
@@ -55,7 +55,6 @@ async function getScheduledQueryRules(session, resourceGroup) {
             !response.data.value ||
             response.data.value.length < 1
         ) {
-            console.log('there were no alerts found in this resource-group.');
             return [];
         } else {
             return response.data.value;
@@ -71,14 +70,21 @@ async function getScheduledQueryRules(session, resourceGroup) {
     }
 }
 
-async function putScheduledQueryRule(session, resourceGroup, name, content) {
+async function putObjects(
+    session,
+    resourceGroup,
+    type,
+    version,
+    name,
+    content
+) {
     const s = new spinner(`importing ${name}... %s`);
     s.start();
     try {
         const response = await axios.put(
             `https://management.azure.com/subscriptions/${
                 session.subscription
-            }/resourcegroups/${resourceGroup}/providers/microsoft.insights/scheduledQueryRules/${name}?api-version=2018-04-16`,
+            }/resourcegroups/${resourceGroup}/providers/microsoft.insights/${type}/${name}?api-version=${version}`,
             content,
             {
                 headers: {
@@ -114,25 +120,46 @@ yargs
         type: 'string',
         demandOption: true
     })
-    .option('filename', {
-        alias: 'f',
-        type: 'string',
-        default: 'rules.json'
-    })
     .command(
         'export',
         'Exports all scheduled-query-rules in the resource-group',
         {},
         async argv => {
             var session = await getAccessToken();
-            var rules = await getScheduledQueryRules(
+            var groups = await getObjects(
                 session,
-                argv.resourceGroup
+                argv.resourceGroup,
+                'actionGroups',
+                '2017-04-01'
             );
             try {
-                fs.writeFileSync(argv.filename, JSON.stringify(rules, null, 4));
+                fs.writeFileSync(
+                    './groups.json',
+                    JSON.stringify(groups, null, 4)
+                );
                 console.log(
-                    `${rules.length} rules exported to ${argv.filename}.`
+                    `${groups.length} groups exported from ${
+                        argv.resourceGroup
+                    } to groups.json.`
+                );
+            } catch (e) {
+                console.error(e);
+            }
+            var rules = await getObjects(
+                session,
+                argv.resourceGroup,
+                'scheduledQueryRules',
+                '2018-04-16'
+            );
+            try {
+                fs.writeFileSync(
+                    './rules.json',
+                    JSON.stringify(rules, null, 4)
+                );
+                console.log(
+                    `${rules.length} rules exported from ${
+                        argv.resourceGroup
+                    } to rules.json.`
                 );
             } catch (e) {
                 console.error(e);
@@ -140,26 +167,61 @@ yargs
         }
     )
     .command(
-        'import',
-        'Imports all scheduled-query-rules from the specified filename',
+        'import-groups',
+        'Imports all action-groups from the groups.json file',
         {},
         async argv => {
             var session = await getAccessToken();
-            var contents = fs.readFileSync(argv.filename);
+            var contents = fs.readFileSync('./groups.json');
+            var groups = JSON.parse(contents);
+            for (const group of groups) {
+                const name = group.name;
+                delete group.id;
+                delete group.name;
+                delete group.type;
+                await putObjects(
+                    session,
+                    argv.resourceGroup,
+                    'actionGroups',
+                    '2017-04-01',
+                    name,
+                    group
+                );
+            }
+            console.log(
+                `${groups.length} groups imported from groups.json to ${
+                    argv.resourceGroup
+                }.`
+            );
+        }
+    )
+    .command(
+        'import-rules',
+        'Imports all scheduled-query-rules from the rules.json file',
+        {},
+        async argv => {
+            var session = await getAccessToken();
+            var contents = fs.readFileSync('./rules.json');
             var rules = JSON.parse(contents);
             for (const rule of rules) {
                 const name = rule.name;
                 delete rule.id;
                 delete rule.name;
                 delete rule.type;
-                await putScheduledQueryRule(
+                await putObjects(
                     session,
                     argv.resourceGroup,
+                    'scheduledQueryRules',
+                    '2018-04-16',
                     name,
                     rule
                 );
             }
-            console.log(`${rules.length} rules imported to ${argv.filename}.`);
+            console.log(
+                `${rules.length} rules imported from rules.json to ${
+                    argv.resourceGroup
+                }.`
+            );
         }
     )
     .demandCommand(1)

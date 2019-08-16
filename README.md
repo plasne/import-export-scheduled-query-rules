@@ -6,15 +6,12 @@ This project exports scheduled-query-rules from Azure and imports them back usin
 # install required libraries
 npm install
 
-# export all rules to rules.json from the specified resource group
+# export all action-groups to groups.json and rules to rules.json
 node rules export --resource-group my-resource-group
 
+# import all action-groups from groups.json to the specified resource group
+node rules import-groups --resource-group my-resource-group
+
 # import all rules from rules.json to the specified resource group
-node rules import --resource-group my-resource-group
-
-# export all rules to a specified filename from the specified resource group
-node rules export --resource-group my-resource-group --filename output.json
-
-# import all rules from a specified filename to the specified resource group
-node rules import --resource-group my-resource-group --filename output.json
+node rules import-rules --resource-group my-resource-group
 ```
