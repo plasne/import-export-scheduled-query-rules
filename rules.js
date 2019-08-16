@@ -123,7 +123,12 @@ yargs
     .command(
         'export',
         'Exports all scheduled-query-rules in the resource-group',
-        {},
+        {
+            'strip-id': {
+                alias: 'x',
+                type: 'bool'
+            }
+        },
         async argv => {
             var session = await getAccessToken();
             var groups = await getObjects(
@@ -132,6 +137,11 @@ yargs
                 'actionGroups',
                 '2017-04-01'
             );
+            if (argv.stripId) {
+                for (const group of groups) {
+                    delete group.id;
+                }
+            }
             try {
                 fs.writeFileSync(
                     './groups.json',
@@ -151,6 +161,11 @@ yargs
                 'scheduledQueryRules',
                 '2018-04-16'
             );
+            if (argv.stripId) {
+                for (const rule of rules) {
+                    delete rule.id;
+                }
+            }
             try {
                 fs.writeFileSync(
                     './rules.json',
